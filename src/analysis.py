@@ -154,6 +154,7 @@ def run_bollinger_backtest(
     beta: float,
     window: int,
     n_std: float,
+    risk_free: float = 0.0,
     initial_money: float = 1.0,
     evaluation_start: pd.Timestamp | None = None,
 ) -> Tuple[BacktestMetrics, pd.DataFrame]:
@@ -248,10 +249,14 @@ def run_bollinger_backtest(
 
     equity_curve = pd.Series(equity_series, index=hb.index)
     daily_returns = equity_curve.pct_change().fillna(0)
-    
-    std_returns = daily_returns.std(ddof=1)
+
+    # convert annual risk-free rate to daily and compute excess returns
+    rf_daily = (1 + float(risk_free)) ** (1 / 252) - 1 if risk_free else 0.0
+    excess_returns = daily_returns - rf_daily
+
+    std_returns = excess_returns.std(ddof=1)
     if std_returns > 0:
-        sharpe_ratio = float((daily_returns.mean() / std_returns) * np.sqrt(252))
+        sharpe_ratio = float((excess_returns.mean() / std_returns) * np.sqrt(252))
     else:
         sharpe_ratio = 0.0
         
@@ -275,6 +280,16 @@ def run_bollinger_backtest(
     result_frame["signal"] = np.nan
     for date, signal in signal_points:
         result_frame.loc[date, "signal"] = signal
+    # attach equity and drawdown series to the result frame for plotting
+    try:
+        result_frame = result_frame.reindex(hb.index)
+        result_frame["equity"] = equity_curve
+        peak_eq = equity_curve.cummax()
+        result_frame["drawdown"] = ((equity_curve - peak_eq) / peak_eq).fillna(0)
+    except Exception:
+        # if anything goes wrong, ensure columns exist but may be NaN
+        result_frame["equity"] = np.nan
+        result_frame["drawdown"] = np.nan
         
     return metrics, result_frame
 

@@ -61,17 +61,34 @@ def build_period_plot(
     signal_frame: pd.DataFrame | None = None,
 ) -> go.Figure:
     figure = make_subplots(
-        rows=3,
+        rows=4,
         cols=1,
         shared_xaxes=True,
         vertical_spacing=0.03,
-        row_heights=[0.4, 0.3, 0.3],
-        subplot_titles=(f"{asset_a} price", f"{asset_b} price", "Spread"),
+        row_heights=[0.3, 0.25, 0.25, 0.2],
+        subplot_titles=(f"{asset_a} price", f"{asset_b} price", "Spread", "Drawdown"),
     )
 
     figure.add_trace(go.Scatter(x=price_matrix.index, y=price_matrix["asset_a"], mode="lines", name=asset_a, line=dict(color="#1f77b4")), row=1, col=1)
     figure.add_trace(go.Scatter(x=price_matrix.index, y=price_matrix["asset_b"], mode="lines", name=asset_b, line=dict(color="#ff7f0e")), row=2, col=1)
     figure.add_trace(go.Scatter(x=spread_series.index, y=spread_series.values, mode="lines", name="spread", line=dict(color="#2ca02c")), row=3, col=1)
+
+    # drawdown plot: use drawdown from signal_frame if available, otherwise skip
+    if signal_frame is not None and "drawdown" in signal_frame.columns:
+        dd = signal_frame["drawdown"].loc[spread_series.index.min(): spread_series.index.max()]
+        figure.add_trace(
+            go.Scatter(
+                x=dd.index,
+                y=dd.values,
+                mode="lines",
+                name="drawdown",
+                line=dict(color="#d62728"),
+                fill="tozeroy",
+                fillcolor="rgba(214,39,40,0.15)",
+            ),
+            row=4,
+            col=1,
+        )
 
     if signal_frame is not None and not signal_frame.empty:
         if {"ma", "upper", "lower"}.issubset(signal_frame.columns):
@@ -162,7 +179,7 @@ def build_period_plot(
         title=f"{period_label} period analysis",
         template="plotly_white",
         hovermode="x unified",
-        height=780,
+        height=900,
         legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="left", x=0),
     )
     figure.update_xaxes(rangeslider_visible=False)
